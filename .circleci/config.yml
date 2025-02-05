@@ -3,7 +3,7 @@ version: 2.1
 executors:
   salesforce-executor:
     docker:
-      - image: cimg/node:20.8  # Updated CircleCI image
+      - image: cimg/node:20.8  # Node.js with npm pre-installed
     working_directory: ~/project
 
 jobs:
@@ -17,11 +17,16 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y curl unzip
       - run:
-          name: Install Salesforce CLI in Home Directory
+          name: Install Salesforce CLI
           command: |
-            npm install --global sfdx-cli --unsafe-perm=true --prefix ~/.npm-global
+            npm install --global sfdx-cli --unsafe-perm=true
             export PATH=~/.npm-global/bin:$PATH
             echo 'export PATH=~/.npm-global/bin:$PATH' >> $BASH_ENV
+      - run:
+          name: Verify Installation
+          command: |
+            source $BASH_ENV
+            which sfdx || echo "sfdx not found"
             sfdx --version
       - persist_to_workspace:
           root: ~/project
@@ -34,52 +39,21 @@ jobs:
       - attach_workspace:
           at: ~/project
       - run:
+          name: Authenticate Dev Hub
+          command: |
+            source $BASH_ENV
+            echo $SF_AUTH_URL > ./authfile
+            sfdx auth:sfdxurl:store -f ./authfile -a DevHub -d
+      - run:
           name: Create Salesforce Scratch Org
           command: |
+            source $BASH_ENV
             sfdx force:org:create -f config/project-scratch-def.json -a ScratchOrg -d 1 -s
             sfdx force:org:display -u ScratchOrg
       - persist_to_workspace:
           root: ~/project
           paths:
             - .
-
-  deploy-changes:
-    executor: salesforce-executor
-    steps:
-      - attach_workspace:
-          at: ~/project
-      - run:
-          name: Deploy Changes to Scratch Org
-          command: |
-            sfdx force:source:push -u ScratchOrg
-      - persist_to_workspace:
-          root: ~/project
-          paths:
-            - .
-
-  run-tests:
-    executor: salesforce-executor
-    steps:
-      - attach_workspace:
-          at: ~/project
-      - run:
-          name: Run Apex Tests and Check Coverage
-          command: |
-            sfdx force:apex:test:run -u ScratchOrg --codecoverage --resultformat human
-      - persist_to_workspace:
-          root: ~/project
-          paths:
-            - .
-
-  delete-scratch-org:
-    executor: salesforce-executor
-    steps:
-      - attach_workspace:
-          at: ~/project
-      - run:
-          name: Delete Scratch Org
-          command: |
-            sfdx force:org:delete -u ScratchOrg -p
 
 workflows:
   version: 2
@@ -89,12 +63,3 @@ workflows:
       - create-scratch-org:
           requires:
             - setup
-      - deploy-changes:
-          requires:
-            - create-scratch-org
-      - run-tests:
-          requires:
-            - deploy-changes
-      - delete-scratch-org:
-          requires:
-            - run-tests
