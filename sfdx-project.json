@@ -1,0 +1,20 @@
+{
+  "packageDirectories": [
+    {
+      "versionName": "ver 0.1",
+      "versionNumber": "0.1.0.NEXT",
+      "path": "force-app",
+      "default": true,
+      "package": "DemoPackageFileUploader",
+      "versionDescription": ""
+    }
+  ],
+  "name": "22Jan_Gihub_FileUploader",
+  "namespace": "DemoPackage2GP",
+  "sfdcLoginUrl": "https://login.salesforce.com",
+  "sourceApiVersion": "62.0",
+  "packageAliases": {
+    "DemoPackageFileUploader": "0HoQy0000000YGDKA2",
+    "DemoPackageFileUploader@0.1.0-1": "04tQy0000005gQ1IAI"
+  }
+}
