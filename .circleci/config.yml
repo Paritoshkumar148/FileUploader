@@ -3,7 +3,7 @@ version: 2.1
 executors:
   salesforce-executor:
     docker:
-      - image: circleci/node:14  # Using Node.js for Salesforce CLI
+      - image: cimg/node:20.8  # Updated to a modern CircleCI image
     working_directory: ~/project
 
 jobs:
@@ -12,16 +12,15 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install Salesforce CLI
+          name: Install Dependencies
           command: |
-            curl -fsSL https://developer.salesforce.com/media/salesforce-cli/install.sh | bash
-            export PATH=$HOME/.local/bin:$PATH
-            sfdx --version
+            sudo apt-get update
+            sudo apt-get install -y curl unzip
       - run:
-          name: Authenticate Dev Hub
+          name: Install Salesforce CLI via NPM
           command: |
-            echo $SF_AUTH_URL > sfdx_auth_url.txt
-            sfdx auth:sfdxurl:store -f sfdx_auth_url.txt -a DevHub
+            npm install --global sfdx-cli
+            sfdx --version
       - persist_to_workspace:
           root: ~/project
           paths:
