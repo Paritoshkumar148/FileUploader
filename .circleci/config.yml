@@ -3,7 +3,7 @@ version: 2.1
 executors:
   salesforce-executor:
     docker:
-      - image: cimg/node:20.8  # Updated to a modern CircleCI image
+      - image: cimg/node:20.8  # Updated CircleCI image
     working_directory: ~/project
 
 jobs:
@@ -17,9 +17,11 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y curl unzip
       - run:
-          name: Install Salesforce CLI via NPM
+          name: Install Salesforce CLI in Home Directory
           command: |
-            npm install --global sfdx-cli
+            npm install --global sfdx-cli --unsafe-perm=true --prefix ~/.npm-global
+            export PATH=~/.npm-global/bin:$PATH
+            echo 'export PATH=~/.npm-global/bin:$PATH' >> $BASH_ENV
             sfdx --version
       - persist_to_workspace:
           root: ~/project
