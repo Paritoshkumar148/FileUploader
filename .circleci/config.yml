@@ -1,42 +1,99 @@
 version: 2.1
 
 executors:
-  salesforce-cli:
+  salesforce-executor:
     docker:
-      - image: circleci/node:14  # Use Node.js for Salesforce CLI
+      - image: circleci/node:14  # Using Node.js for Salesforce CLI
     working_directory: ~/project
 
 jobs:
-  auth:
-    executor: salesforce-cli
+  setup:
+    executor: salesforce-executor
     steps:
       - checkout
       - run:
-          name: Authenticate with Salesforce
-          command: echo $SF_AUTH_URL | sfdx auth:sfdxurl:store -f /dev/stdin -s -a myOrg
+          name: Install Salesforce CLI
+          command: |
+            curl -fsSL https://developer.salesforce.com/media/salesforce-cli/install.sh | bash
+            export PATH=$HOME/.local/bin:$PATH
+            sfdx --version
+      - run:
+          name: Authenticate Dev Hub
+          command: |
+            echo $SF_AUTH_URL > sfdx_auth_url.txt
+            sfdx auth:sfdxurl:store -f sfdx_auth_url.txt -a DevHub
+      - persist_to_workspace:
+          root: ~/project
+          paths:
+            - .
 
-  deploy:
-    executor: salesforce-cli
+  create-scratch-org:
+    executor: salesforce-executor
     steps:
-      - checkout
+      - attach_workspace:
+          at: ~/project
       - run:
-          name: Authenticate with Salesforce
-          command: echo $SF_AUTH_URL | sfdx auth:sfdxurl:store -f /dev/stdin -s -a myOrg
-      - run:
-          name: Deploy Metadata
-          command: sfdx force:source:deploy -p force-app -u myOrg --json --loglevel fatal
+          name: Create Salesforce Scratch Org
+          command: |
+            sfdx force:org:create -f config/project-scratch-def.json -a ScratchOrg -d 1 -s
+            sfdx force:org:display -u ScratchOrg
+      - persist_to_workspace:
+          root: ~/project
+          paths:
+            - .
 
-  test:
-    executor: salesforce-cli
+  deploy-changes:
+    executor: salesforce-executor
     steps:
-      - checkout
+      - attach_workspace:
+          at: ~/project
       - run:
-          name: Authenticate with Salesforce
-          command: echo $SF_AUTH_URL | sfdx auth:sfdxurl:store -f /dev/stdin -s -a myOrg
+          name: Deploy Changes to Scratch Org
+          command: |
+            sfdx force:source:push -u ScratchOrg
+      - persist_to_workspace:
+          root: ~/project
+          paths:
+            - .
+
+  run-tests:
+    executor: salesforce-executor
+    steps:
+      - attach_workspace:
+          at: ~/project
       - run:
-          name: Run Apex Tests
-          command: sfdx force:apex:test:run -u myOrg --wait 10 --resultformat human
+          name: Run Apex Tests and Check Coverage
+          command: |
+            sfdx force:apex:test:run -u ScratchOrg --codecoverage --resultformat human
+      - persist_to_workspace:
+          root: ~/project
+          paths:
+            - .
+
+  delete-scratch-org:
+    executor: salesforce-executor
+    steps:
+      - attach_workspace:
+          at: ~/project
+      - run:
+          name: Delete Scratch Org
+          command: |
+            sfdx force:org:delete -u ScratchOrg -p
 
 workflows:
   version: 2
-  deploy_and_
+  salesforce-ci-cd:
+    jobs:
+      - setup
+      - create-scratch-org:
+          requires:
+            - setup
+      - deploy-changes:
+          requires:
+            - create-scratch-org
+      - run-tests:
+          requires:
+            - deploy-changes
+      - delete-scratch-org:
+          requires:
+            - run-tests
