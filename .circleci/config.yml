@@ -5,8 +5,6 @@ executors:
     docker:
       - image: cimg/node:20.8  # Updated CircleCI image
     working_directory: ~/project
-    environment:
-      PATH: "/home/circleci/sfdx/bin:$PATH"
 
 jobs:
   setup:
@@ -17,40 +15,30 @@ jobs:
           name: Install Dependencies
           command: |
             sudo apt-get update
-            sudo apt-get install -y curl unzip
+            sudo apt-get install -y curl unzip openssh-client  # Ensure SSH is installed
       - run:
-          name: Install Salesforce CLI
+          name: Configure SSH for GitHub
           command: |
-            curl -fsSL https://developer.salesforce.com/media/salesforce-cli/sfdx-linux-amd64.tar.xz | tar xJf -
-            ./sfdx/install
-            echo 'export PATH=~/sfdx/bin:$PATH' >> $BASH_ENV
-            echo 'export SFDX_AUTOUPDATE_DISABLE=true' >> $BASH_ENV
-            source $BASH_ENV
+            mkdir -p ~/.ssh
+            ssh-keyscan github.com >> ~/.ssh/known_hosts
+            chmod 600 ~/.ssh/known_hosts
+      - run:
+          name: Install Salesforce CLI in Home Directory
+          command: |
+            npm install --global sfdx-cli --unsafe-perm=true --prefix ~/.npm-global
+            export PATH=~/.npm-global/bin:$PATH
+            echo 'export PATH=~/.npm-global/bin:$PATH' >> $BASH_ENV
             sfdx --version
       - persist_to_workspace:
           root: ~/project
           paths:
             - .
-          # Persist installed SFDX binary to the workspace
-      - persist_to_workspace:
-          root: ~/sfdx
-          paths:
-            - bin
-            - lib
 
   create-scratch-org:
     executor: salesforce-executor
     steps:
       - attach_workspace:
           at: ~/project
-      - attach_workspace:
-          at: ~/sfdx
-      - run:
-          name: Set PATH for SFDX
-          command: |
-            export PATH=~/sfdx/bin:$PATH
-            echo 'export PATH=~/sfdx/bin:$PATH' >> $BASH_ENV
-            source $BASH_ENV
       - run:
           name: Create Salesforce Scratch Org
           command: |
@@ -66,14 +54,6 @@ jobs:
     steps:
       - attach_workspace:
           at: ~/project
-      - attach_workspace:
-          at: ~/sfdx
-      - run:
-          name: Set PATH for SFDX
-          command: |
-            export PATH=~/sfdx/bin:$PATH
-            echo 'export PATH=~/sfdx/bin:$PATH' >> $BASH_ENV
-            source $BASH_ENV
       - run:
           name: Deploy Changes to Scratch Org
           command: |
@@ -88,14 +68,6 @@ jobs:
     steps:
       - attach_workspace:
           at: ~/project
-      - attach_workspace:
-          at: ~/sfdx
-      - run:
-          name: Set PATH for SFDX
-          command: |
-            export PATH=~/sfdx/bin:$PATH
-            echo 'export PATH=~/sfdx/bin:$PATH' >> $BASH_ENV
-            source $BASH_ENV
       - run:
           name: Run Apex Tests and Check Coverage
           command: |
@@ -110,14 +82,6 @@ jobs:
     steps:
       - attach_workspace:
           at: ~/project
-      - attach_workspace:
-          at: ~/sfdx
-      - run:
-          name: Set PATH for SFDX
-          command: |
-            export PATH=~/sfdx/bin:$PATH
-            echo 'export PATH=~/sfdx/bin:$PATH' >> $BASH_ENV
-            source $BASH_ENV
       - run:
           name: Delete Scratch Org
           command: |
